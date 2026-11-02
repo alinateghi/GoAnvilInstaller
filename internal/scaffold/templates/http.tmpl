@@ -1,0 +1,25 @@
+internal/api/http/http.go
+package http
+
+import (
+    "context"
+
+    "github.com/gofiber/fiber/v2"
+    "{{.FrameworkModule}}/api/http/middleware"
+    "{{.FrameworkModule}}/database"
+)
+
+func New(ctx context.Context, connection *database.Connection) *fiber.App {
+    app := fiber.New(fiber.Config{DisableStartupMessage: true})
+    app.Use(func(c *fiber.Ctx) error {
+        c.SetUserContext(ctx)
+        return c.Next()
+    })
+    app.Use(middleware.DatabaseConnection(connection))
+    app.Get("/health", func(c *fiber.Ctx) error {
+        return c.JSON(fiber.Map{"status": "ok"})
+    })
+    // Add routes here. Services choose when to call database.Begin; middleware
+    // finalizes buffered responses. Repositories resolve database.FromContext.
+    return app
+}

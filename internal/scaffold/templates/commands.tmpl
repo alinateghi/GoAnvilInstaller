@@ -1,0 +1,52 @@
+internal/cmd/commands.go
+package cmd
+
+import (
+    "context"
+    "errors"
+    "fmt"
+
+    anvil {{quote .FrameworkModule}}
+    server "{{.FrameworkModule}}/api/http"
+    "{{.FrameworkModule}}/commands"
+    "{{.FrameworkModule}}/database/migrate"
+    "{{.FrameworkModule}}/database/sqldb"
+    apphttp "{{.Module}}/internal/api/http"
+)
+
+// Register configures commands. Bind application repositories and services here
+// before constructing route consumers. Bind and Resolve use the exact same type.
+func Register(app *anvil.App) error {
+    if err := app.RegisterCommand("serve", serve(app)); err != nil { return err }
+    return app.RegisterCommand("migrate", migration(app))
+}
+
+func serve(app *anvil.App) anvil.Command {
+    return func(ctx context.Context, args []string) (err error) {
+        if len(args) != 0 { return fmt.Errorf("usage: serve") }
+        cfg, err := commands.Configuration(app)
+        if err != nil { return err }
+        connection, cleanup, err := commands.Connection(ctx, app)
+        if err != nil { return err }
+        defer func() { err = errors.Join(err, cleanup()) }()
+        return server.Run(ctx, apphttp.New(ctx, connection), cfg.HTTP.Address)
+    }
+}
+
+func migration(app *anvil.App) anvil.Command {
+    return func(ctx context.Context, args []string) (err error) {
+        if len(args) > 1 || (len(args) == 1 && args[0] != "up" && args[0] != "down") {
+            return fmt.Errorf("usage: migrate [up|down]")
+        }
+        direction := "up"
+        if len(args) == 1 { direction = args[0] }
+        cfg, err := commands.Configuration(app)
+        if err != nil { return err }
+        connection, cleanup, err := commands.Connection(ctx, app)
+        if err != nil { return err }
+        defer func() { err = errors.Join(err, cleanup()) }()
+        dialect := connection.Dialect
+        if dialect == "" { dialect = sqldb.Dialect(cfg.Database.Driver) }
+        return migrate.Run(ctx, connection.SQL, cfg.Database.MigrationsDir, dialect, direction)
+    }
+}

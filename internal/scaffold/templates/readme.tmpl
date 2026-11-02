@@ -1,0 +1,67 @@
+README.md
+# {{.Name}}
+
+Generated with GoAnvilInstaller. Go 1.24 or newer is required.
+
+## Run
+
+Run commands from this project root. Copy `.env.example` to `.env` and set your
+{{.Database}} connection settings (passwords belong in `.env`, not source control).
+For server databases, create the database before running commands.
+
+```sh
+go mod tidy
+go run . migrate up
+go run . serve
+```
+
+GET `/health` returns `{"status":"ok"}`. Startup connects to the configured database;
+the health endpoint itself reports process health, not database readiness.
+Stop with Ctrl+C. Configuration loads once: defaults < env file < process env.
+`APP_ENV_FILE` selects a required file; an empty value disables file loading.
+
+{{if .FrameworkPath}}This checkout uses a local framework replace directive. Remove it with
+`go mod edit -dropreplace={{.FrameworkModule}}` after publishing the framework and
+selecting a real version with `go get {{.FrameworkModule}}@VERSION`.
+{{else}}The framework dependency must be published at {{.FrameworkModule}} {{.FrameworkVersion}}.
+For unpublished development, initialize with `--framework-path=/path/to/GoAnvil`.
+{{end}}
+## Generate
+
+```sh
+anvil make:model Todo --fields=Content:string,Done:bool
+anvil make:migration --up --down --model=Todo
+go run . migrate up
+```
+
+Models go into `models/`; application repositories and services go under `internal/`.
+Generators find `.anvil.json` from nested directories. They refuse overwrites.
+The migration generator reads the Go struct and targets the database selected at
+initialization, recorded in `.anvil.json`. Changing DB_DRIVER does not translate
+existing SQL: review and replace migrations when changing database dialects.
+Table names default to the snake_case model name plus `s`; use `--table` for
+irregular plurals. Supported fields: string, bool, int, int64, uint64 (except SQLite),
+float64, time.Time, []byte, and nullable pointers. ID must be int or int64.
+Tags do not customize column names. Edit generated SQL for indexes, constraints,
+defaults, relationships, or schema changes; this generates initial CREATE/DROP only.
+It does not generate CRUD routes, repositories, or ORM adapters.
+
+The runner records applied filenames in `goanvil_migrations`. `migrate up` applies
+pending files; `migrate down` reverses **all** recorded files, dropping their tables
+and data. Down filenames must match up filenames. Review SQL before running it.
+Run one migrator at a time. DDL rollback depends on the engine; MySQL can commit
+DDL before a migration fails. There are no checksums or automatic schema diffs.
+
+Use public interfaces and `anvil.Bind[T]` / `anvil.Resolve[T]` for dependencies.
+Repositories take context first and call `database.FromContext` per operation.
+Services choose transactions; HTTP middleware commits buffered successes and
+rolls back errors, error statuses, panics, and canceled open transactions.
+Streaming responses require explicit finalization before sending data.
+
+## Verify
+
+```sh
+go test ./...
+go vet ./...
+go build ./...
+```

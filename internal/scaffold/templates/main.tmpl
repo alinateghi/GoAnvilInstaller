@@ -1,0 +1,46 @@
+main.go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    "os/signal"
+    "syscall"
+
+    anvil {{quote .FrameworkModule}}
+    "{{.FrameworkModule}}/config"
+    "{{.Module}}/internal/cmd"
+)
+
+func main() {
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
+    if err := run(ctx, os.Args[1:]); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    }
+}
+
+func run(ctx context.Context, args []string) error {
+    defaults := config.Defaults()
+    defaults.HTTP.Address = {{quote .Address}}
+    defaults.Database.Driver = {{quote .Database}}
+    defaults.Database.Name = {{quote .DBName}}
+    defaults.Database.Host = {{quote .DBHost}}
+    defaults.Database.Port = {{.DBPort}}
+    defaults.Database.Username = {{quote .DBUser}}
+    defaults.Database.MigrationsDir = "database/migrations"
+    {{if eq .Database "sqlite"}}defaults.Database.MaxOpenConns = 1
+    defaults.Database.MaxIdleConns = 1{{end}}
+    options := []config.Option{config.WithDefaults(defaults)}
+    if file, exists := os.LookupEnv("APP_ENV_FILE"); exists {
+        options = append(options, config.WithEnvFile(file))
+    }
+    cfg, err := config.Load(options...)
+    if err != nil { return err }
+    app := anvil.New()
+    if err := anvil.Bind[config.Config](app, cfg); err != nil { return err }
+    if err := cmd.Register(app); err != nil { return err }
+    return app.Run(ctx, args)
+}

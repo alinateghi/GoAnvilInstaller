@@ -1,0 +1,5 @@
+internal/repo/doc.go
+// Package repo holds concrete application repositories. Operations take context
+// first and resolve database.FromContext(ctx) for each operation. Repository
+// structs must not retain a pool, transaction, or request context.
+package repo

@@ -1,0 +1,12 @@
+go.mod
+module {{.Module}}
+
+go 1.24.0
+
+require (
+    {{.FrameworkModule}} {{.FrameworkVersion}}
+    github.com/gofiber/fiber/v2 v2.52.6
+)
+{{if .FrameworkPath}}
+replace {{.FrameworkModule}} => {{quote .FrameworkPath}}
+{{end}}
